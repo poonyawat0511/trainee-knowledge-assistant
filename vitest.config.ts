@@ -10,5 +10,10 @@ module.exports = defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    coverage: {
+      provider: 'v8',
+      include: ['src/modules/**/application/**', 'src/shared/**'],
+      exclude: ['**/*.sql'],
+    },
   },
 })
