@@ -9,6 +9,19 @@ import type { TextExtractor } from '../application/ports'
 // resolve the real on-disk worker file (via pdf-parse's own dependency
 // resolution, since pnpm doesn't hoist pdfjs-dist to our package) and point
 // pdfjs-dist's GlobalWorkerOptions at it explicitly before the first parse.
+//
+// IMPORTANT — no code-level recovery if this runs too late: pdfjs-dist's
+// `PDFWorker._setupFakeWorkerGlobal` is a class-level static getter that
+// memoizes its result (success OR rejection) exactly once, forever, for the
+// life of the process (it uses an internal `shadow()` helper to replace the
+// getter with a plain cached value/promise on first access). If the very
+// first PDF parse in a fresh process happens before `ensureWorkerConfigured`
+// runs (or runs with a bad path), that failure is cached permanently —
+// every subsequent PDF upload in that same process will keep failing with
+// "Setting up fake worker failed", even after this file is fixed and
+// hot-reloaded, because pdfjs-dist itself isn't recompiled by unrelated
+// edits. There is no in-process retry that can clear this; the only fix is
+// a full process restart (e.g. restarting `next dev`, or a fresh deploy).
 let workerConfigured = false
 function ensureWorkerConfigured(): void {
   if (workerConfigured) return
