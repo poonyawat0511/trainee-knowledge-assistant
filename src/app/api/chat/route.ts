@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getUserId } from '@/shared/auth/get-user-id'
-import { makeSendMessageUseCase } from '@/modules/chat/infrastructure/factory'
+import { makeSendMessageUseCase, makeConversationRepository } from '@/modules/chat/infrastructure/factory'
 
 const bodySchema = z.object({
   conversationId: z.string().min(1),
@@ -18,6 +18,11 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: { code: 'INVALID_BODY', message: 'Invalid chat request' } }, { status: 400 })
+  }
+
+  const conversation = await makeConversationRepository().findById(parsed.data.conversationId, userId)
+  if (!conversation) {
+    return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'Conversation not found' } }, { status: 404 })
   }
 
   const result = await makeSendMessageUseCase().execute({
