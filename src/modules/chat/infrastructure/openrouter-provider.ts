@@ -1,6 +1,6 @@
 import type { AiProvider } from '../application/ports'
 
-const MODEL = 'meta-llama/llama-3.1-8b-instruct:free'
+const MODEL = 'openai/gpt-oss-20b:free'
 const TIMEOUT_MS = 30_000
 
 /** Thrown when OpenRouter responds with a non-2xx status. Never retried — a
