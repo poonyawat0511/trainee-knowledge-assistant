@@ -28,10 +28,10 @@ export class SqliteDocumentRepository implements DocumentRepository {
   async save(doc: Document): Promise<void> {
     getDb()
       .prepare(
-        `INSERT INTO documents (id, user_id, filename, mime_type, size_bytes, content_text)
-         VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO documents (id, user_id, filename, mime_type, size_bytes, content_text, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(doc.id, doc.userId, doc.filename, doc.mimeType, doc.sizeBytes, doc.contentText)
+      .run(doc.id, doc.userId, doc.filename, doc.mimeType, doc.sizeBytes, doc.contentText, doc.createdAt)
   }
 
   async findById(id: string, userId: string): Promise<Document | null> {

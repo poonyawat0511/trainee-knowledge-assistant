@@ -26,10 +26,17 @@ export class SqliteMessageRepository implements MessageRepository {
   async save(message: Message): Promise<void> {
     getDb()
       .prepare(
-        `INSERT INTO messages (id, conversation_id, role, content, token_count)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO messages (id, conversation_id, role, content, token_count, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .run(message.id, message.conversationId, message.role, message.content, message.tokenCount)
+      .run(
+        message.id,
+        message.conversationId,
+        message.role,
+        message.content,
+        message.tokenCount,
+        message.createdAt
+      )
   }
 
   async listByConversation(conversationId: string): Promise<Message[]> {

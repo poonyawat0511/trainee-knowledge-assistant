@@ -16,8 +16,8 @@ function toConversation(row: ConversationRow): Conversation {
 export class SqliteConversationRepository implements ConversationRepository {
   async save(conversation: Conversation): Promise<void> {
     getDb()
-      .prepare('INSERT INTO conversations (id, user_id, title) VALUES (?, ?, ?)')
-      .run(conversation.id, conversation.userId, conversation.title)
+      .prepare('INSERT INTO conversations (id, user_id, title, created_at) VALUES (?, ?, ?, ?)')
+      .run(conversation.id, conversation.userId, conversation.title, conversation.createdAt)
   }
 
   async findById(id: string, userId: string): Promise<Conversation | null> {
