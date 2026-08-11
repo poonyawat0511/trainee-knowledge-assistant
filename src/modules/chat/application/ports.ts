@@ -11,11 +11,22 @@ export interface ConversationRepository {
   listByUser(userId: string): Promise<Conversation[]>
 }
 
+export interface StreamChunk {
+  delta: string
+  done: boolean
+  tokenCount?: number
+}
+
 export interface AiProvider {
   complete(input: {
     systemPrompt?: string
     messages: { role: 'user' | 'assistant'; content: string }[]
   }): Promise<{ content: string; tokenCount: number }>
+
+  completeStream(input: {
+    systemPrompt?: string
+    messages: { role: 'user' | 'assistant'; content: string }[]
+  }): AsyncIterable<StreamChunk>
 }
 
 export interface DocumentTextLookup {

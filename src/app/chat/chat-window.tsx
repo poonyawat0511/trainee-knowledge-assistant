@@ -53,32 +53,64 @@ export function ChatWindow({
     if (!input.trim() || !conversationId) return
 
     const userMessage = input
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }])
+    setMessages((prev) => [...prev, { role: 'user', content: userMessage }, { role: 'assistant', content: '' }])
     setInput('')
     setSending(true)
     setError(null)
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId, message: userMessage, documentId: documentId ?? undefined }),
-      })
+    const response = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversationId, message: userMessage, documentId: documentId ?? undefined }),
+    })
 
-      const body = await response.json()
-
-      if (!response.ok) {
-        setError(body.error?.message ?? 'Something went wrong')
-        return
-      }
-
-      setMessages((prev) => [...prev, { role: 'assistant', content: body.reply, tokenCount: body.tokenCount }])
-      setSessionTokens((prev) => prev + body.tokenCount)
-    } catch {
-      setError('Something went wrong')
-    } finally {
+    if (!response.ok || !response.body) {
       setSending(false)
+      setError('Something went wrong')
+      return
     }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue
+        const event = JSON.parse(line.slice(5).trim())
+
+        if (event.error) {
+          setError('The AI provider failed to respond. Please try again.')
+          continue
+        }
+
+        if (event.delta) {
+          setMessages((prev) => {
+            const next = [...prev]
+            next[next.length - 1] = { ...next[next.length - 1], content: next[next.length - 1].content + event.delta }
+            return next
+          })
+        }
+
+        if (event.done) {
+          setMessages((prev) => {
+            const next = [...prev]
+            next[next.length - 1] = { ...next[next.length - 1], tokenCount: event.tokenCount }
+            return next
+          })
+          setSessionTokens((prev) => prev + event.tokenCount)
+        }
+      }
+    }
+
+    setSending(false)
   }
 
   return (

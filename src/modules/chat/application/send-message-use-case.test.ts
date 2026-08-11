@@ -10,6 +10,7 @@ function makeUseCase(overrides: { ai?: Partial<AiProvider> } = {}) {
   }
   const ai: AiProvider = {
     complete: vi.fn(async () => ({ content: 'Hello back', tokenCount: 12 })),
+    completeStream: vi.fn(async function* () {}),
     ...overrides.ai,
   }
   const ids: IdGenerator = { generate: vi.fn(() => 'msg-1') }

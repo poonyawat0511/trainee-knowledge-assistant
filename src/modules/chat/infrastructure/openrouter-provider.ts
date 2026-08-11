@@ -65,4 +65,67 @@ export class OpenRouterProvider implements AiProvider {
       clearTimeout(timeout)
     }
   }
+
+  async *completeStream(input: {
+    systemPrompt?: string
+    messages: { role: 'user' | 'assistant'; content: string }[]
+  }): AsyncIterable<import('../application/ports').StreamChunk> {
+    const apiKey = process.env.OPENROUTER_API_KEY
+    if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set')
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        stream: true,
+        stream_options: { include_usage: true },
+        messages: [
+          ...(input.systemPrompt ? [{ role: 'system', content: input.systemPrompt }] : []),
+          ...input.messages,
+        ],
+      }),
+    })
+
+    if (!response.ok || !response.body) {
+      throw new Error(`OpenRouter stream error: ${response.status}`)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let fullContent = ''
+    let tokenCount = 0
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data:')) continue
+        const payload = trimmed.slice(5).trim()
+        if (payload === '[DONE]') continue
+
+        const json = JSON.parse(payload)
+        const delta: string = json.choices?.[0]?.delta?.content ?? ''
+        if (json.usage?.total_tokens) tokenCount = json.usage.total_tokens
+        if (delta) {
+          fullContent += delta
+          yield { delta, done: false }
+        }
+      }
+    }
+
+    // Fallback if the provider never sent usage in the stream
+    if (!tokenCount) tokenCount = Math.ceil(fullContent.length / 4)
+    yield { delta: '', done: true, tokenCount }
+  }
 }
