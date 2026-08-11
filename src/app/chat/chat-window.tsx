@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -23,6 +23,32 @@ export function ChatWindow({
   const [error, setError] = useState<string | null>(null)
   const [sessionTokens, setSessionTokens] = useState(0)
 
+  useEffect(() => {
+    if (!conversationId) return
+
+    let cancelled = false
+
+    fetch(`/api/conversations/${conversationId}/messages`)
+      .then((r) => r.json())
+      .then((body) => {
+        if (cancelled) return
+        const loaded: ChatMessage[] = body.messages ?? []
+        setMessages(loaded)
+        setSessionTokens(loaded.reduce((sum, m) => sum + (m.tokenCount ?? 0), 0))
+        setError(null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setMessages([])
+        setSessionTokens(0)
+        setError('Failed to load conversation history')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [conversationId])
+
   async function handleSend() {
     if (!input.trim() || !conversationId) return
 
@@ -32,22 +58,27 @@ export function ChatWindow({
     setSending(true)
     setError(null)
 
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversationId, message: userMessage, documentId: documentId ?? undefined }),
-    })
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId, message: userMessage, documentId: documentId ?? undefined }),
+      })
 
-    const body = await response.json()
-    setSending(false)
+      const body = await response.json()
 
-    if (!response.ok) {
-      setError(body.error?.message ?? 'Something went wrong')
-      return
+      if (!response.ok) {
+        setError(body.error?.message ?? 'Something went wrong')
+        return
+      }
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: body.reply, tokenCount: body.tokenCount }])
+      setSessionTokens((prev) => prev + body.tokenCount)
+    } catch {
+      setError('Something went wrong')
+    } finally {
+      setSending(false)
     }
-
-    setMessages((prev) => [...prev, { role: 'assistant', content: body.reply, tokenCount: body.tokenCount }])
-    setSessionTokens((prev) => prev + body.tokenCount)
   }
 
   return (

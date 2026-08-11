@@ -20,22 +20,40 @@ export default function ChatPage() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
   const [documentId, setDocumentId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/conversations')
       .then((r) => r.json())
       .then((body) => setConversations(body.conversations ?? []))
+      .catch(() => setError('Failed to load conversations'))
 
     fetch('/api/documents')
       .then((r) => r.json())
       .then((body) => setDocuments(body.documents ?? []))
+      .catch(() => setError('Failed to load documents'))
   }, [])
 
   async function handleNew() {
-    const response = await fetch('/api/conversations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-    const body = await response.json()
-    setConversations((prev) => [body.conversation, ...prev])
-    setActiveId(body.conversation.id)
+    try {
+      const response = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      const body = await response.json()
+
+      if (!response.ok) {
+        setError(body.error?.message ?? 'Failed to create a new chat')
+        return
+      }
+
+      setConversations((prev) => [body.conversation, ...prev])
+      setActiveId(body.conversation.id)
+      setError(null)
+    } catch {
+      setError('Failed to create a new chat')
+    }
   }
 
   return (
@@ -62,7 +80,8 @@ export default function ChatPage() {
             ))}
           </select>
         </div>
-        <ChatWindow conversationId={activeId} documentId={documentId} />
+        {error && <p className="border-b bg-red-50 p-2 text-sm text-red-600">{error}</p>}
+        <ChatWindow key={activeId} conversationId={activeId} documentId={documentId} />
       </div>
     </div>
   )
