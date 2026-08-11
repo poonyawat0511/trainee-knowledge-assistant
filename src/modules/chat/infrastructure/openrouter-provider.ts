@@ -73,22 +73,35 @@ export class OpenRouterProvider implements AiProvider {
     const apiKey = process.env.OPENROUTER_API_KEY
     if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set')
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        stream: true,
-        stream_options: { include_usage: true },
-        messages: [
-          ...(input.systemPrompt ? [{ role: 'system', content: input.systemPrompt }] : []),
-          ...input.messages,
-        ],
-      }),
-    })
+    // Timeout applies only to the initial connection (time to receive
+    // response headers), not the full stream duration — SSE replies can
+    // legitimately run longer than TIMEOUT_MS for long completions, but a
+    // hung/never-connecting upstream would otherwise block forever.
+    const controller = new AbortController()
+    const connectTimeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+    let response: Response
+    try {
+      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          stream: true,
+          stream_options: { include_usage: true },
+          messages: [
+            ...(input.systemPrompt ? [{ role: 'system', content: input.systemPrompt }] : []),
+            ...input.messages,
+          ],
+        }),
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(connectTimeout)
+    }
 
     if (!response.ok || !response.body) {
       throw new Error(`OpenRouter stream error: ${response.status}`)
