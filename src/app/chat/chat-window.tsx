@@ -58,59 +58,69 @@ export function ChatWindow({
     setSending(true)
     setError(null)
 
-    const response = await fetch('/api/chat/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversationId, message: userMessage, documentId: documentId ?? undefined }),
-    })
+    try {
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId, message: userMessage, documentId: documentId ?? undefined }),
+      })
 
-    if (!response.ok || !response.body) {
-      setSending(false)
-      setError('Something went wrong')
-      return
-    }
+      if (!response.ok || !response.body) {
+        const body = await response.json().catch(() => null)
+        setError(body?.error?.message ?? 'Something went wrong')
+        return
+      }
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
 
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n\n')
-      buffer = lines.pop() ?? ''
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n\n')
+        buffer = lines.pop() ?? ''
 
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue
-        const event = JSON.parse(line.slice(5).trim())
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue
 
-        if (event.error) {
-          setError('The AI provider failed to respond. Please try again.')
-          continue
-        }
+          let event: { error?: string; delta?: string; done?: boolean; tokenCount?: number }
+          try {
+            event = JSON.parse(line.slice(5).trim())
+          } catch {
+            continue
+          }
 
-        if (event.delta) {
-          setMessages((prev) => {
-            const next = [...prev]
-            next[next.length - 1] = { ...next[next.length - 1], content: next[next.length - 1].content + event.delta }
-            return next
-          })
-        }
+          if (event.error) {
+            setError('The AI provider failed to respond. Please try again.')
+            continue
+          }
 
-        if (event.done) {
-          setMessages((prev) => {
-            const next = [...prev]
-            next[next.length - 1] = { ...next[next.length - 1], tokenCount: event.tokenCount }
-            return next
-          })
-          setSessionTokens((prev) => prev + event.tokenCount)
+          if (event.delta) {
+            setMessages((prev) => {
+              const next = [...prev]
+              next[next.length - 1] = { ...next[next.length - 1], content: next[next.length - 1].content + event.delta }
+              return next
+            })
+          }
+
+          if (event.done) {
+            setMessages((prev) => {
+              const next = [...prev]
+              next[next.length - 1] = { ...next[next.length - 1], tokenCount: event.tokenCount }
+              return next
+            })
+            setSessionTokens((prev) => prev + (event.tokenCount ?? 0))
+          }
         }
       }
+    } catch {
+      setError('Something went wrong')
+    } finally {
+      setSending(false)
     }
-
-    setSending(false)
   }
 
   return (
