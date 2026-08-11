@@ -45,3 +45,6 @@ next-env.d.ts
 
 # superpowers agent workspace (scratch, not project deliverable)
 .superpowers/
+
+# Exclude .env.example file (template for environment variables)
+!.env.example
