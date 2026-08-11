@@ -3,6 +3,10 @@ import type { AiProvider } from '../application/ports'
 const MODEL = 'meta-llama/llama-3.1-8b-instruct:free'
 const TIMEOUT_MS = 30_000
 
+/** Thrown when OpenRouter responds with a non-2xx status. Never retried — a
+ * 4xx/5xx will not succeed on retry, so retrying only doubles latency. */
+class HttpStatusError extends Error {}
+
 export class OpenRouterProvider implements AiProvider {
   async complete(input: {
     systemPrompt?: string
@@ -23,8 +27,9 @@ export class OpenRouterProvider implements AiProvider {
 
     try {
       return await attempt()
-    } catch {
-      // one retry on network failure
+    } catch (error) {
+      if (error instanceof HttpStatusError) throw error
+      // one retry on genuine network failure (fetch rejection, timeout abort, etc.)
       return await attempt()
     }
   }
@@ -48,7 +53,7 @@ export class OpenRouterProvider implements AiProvider {
       })
 
       if (!response.ok) {
-        throw new Error(`OpenRouter error: ${response.status}`)
+        throw new HttpStatusError(`OpenRouter error: ${response.status}`)
       }
 
       const data = await response.json()
