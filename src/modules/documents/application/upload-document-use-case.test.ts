@@ -13,6 +13,7 @@ function makeUseCase(overrides: {
   const repo: DocumentRepository = {
     save: vi.fn(async () => {}),
     findById: vi.fn(async () => null),
+    listByConversation: vi.fn(async () => []),
     ...overrides.repo,
   }
   const extractor: TextExtractor = {
@@ -28,6 +29,7 @@ describe('UploadDocumentUseCase', () => {
     const { useCase } = makeUseCase()
     const result = await useCase.execute({
       userId: 'u1',
+      conversationId: 'conv-1',
       filename: 'x.exe',
       mimeType: 'application/octet-stream',
       buffer: Buffer.from('data'),
@@ -39,6 +41,7 @@ describe('UploadDocumentUseCase', () => {
     const { useCase } = makeUseCase()
     const result = await useCase.execute({
       userId: 'u1',
+      conversationId: 'conv-1',
       filename: 'big.txt',
       mimeType: 'text/plain',
       buffer: Buffer.alloc(MAX_BYTES + 1),
@@ -50,6 +53,7 @@ describe('UploadDocumentUseCase', () => {
     const { useCase } = makeUseCase({ extractor: { extract: vi.fn(async () => '   ') } })
     const result = await useCase.execute({
       userId: 'u1',
+      conversationId: 'conv-1',
       filename: 'empty.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from(''),
@@ -57,10 +61,11 @@ describe('UploadDocumentUseCase', () => {
     expect(result).toEqual({ ok: false, error: 'EMPTY_FILE' })
   })
 
-  it('saves and returns the document on success', async () => {
+  it('saves and returns the document, linked to the given conversation', async () => {
     const { useCase, repo } = makeUseCase()
     const result = await useCase.execute({
       userId: 'u1',
+      conversationId: 'conv-1',
       filename: 'notes.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from('hello world'),
@@ -70,7 +75,9 @@ describe('UploadDocumentUseCase', () => {
     if (result.ok) {
       expect(result.value.id).toBe('doc-1')
       expect(result.value.contentText).toBe('extracted text')
+      expect(result.value.conversationId).toBe('conv-1')
     }
     expect(repo.save).toHaveBeenCalledOnce()
+    expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'conv-1' }))
   })
 })
