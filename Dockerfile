@@ -4,8 +4,18 @@ RUN corepack enable
 
 FROM base AS deps
 WORKDIR /app
+# Build tools for node-gyp, needed to compile better-sqlite3 from source below.
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
+# better-sqlite3 ships a bundled prebuilt native binding, but it has been
+# observed to segfault at runtime in this Docker environment despite loading
+# without error (see README Known Issues). Forcing a from-source rebuild for
+# this container's actual target platform avoids relying on that prebuild.
+RUN cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 \
+    && rm -rf prebuilds build \
+    && npx node-gyp rebuild
 
 FROM base AS build
 WORKDIR /app

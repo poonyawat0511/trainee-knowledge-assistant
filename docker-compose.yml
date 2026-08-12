@@ -2,6 +2,11 @@
 services:
   app:
     build: .
+    # Pin to the host's native arch. Without this, Docker Desktop on Apple
+    # Silicon can pull/build an amd64 image and run it under QEMU emulation,
+    # which is a known cause of native Node addons (like better-sqlite3)
+    # segfaulting despite building "successfully".
+    platform: linux/arm64
     ports:
       - "3000:3000"
     environment:
