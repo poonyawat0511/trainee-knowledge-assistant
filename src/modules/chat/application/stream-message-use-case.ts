@@ -22,12 +22,11 @@ export class StreamMessageUseCase {
     userId: string
     conversationId: string
     userMessage: string
-    documentId?: string
   }): AsyncGenerator<StreamChunk> {
     const history = await this.messages.listByConversation(input.conversationId)
     const systemPrompt = await this.buildContext.execute({
       userId: input.userId,
-      documentId: input.documentId,
+      conversationId: input.conversationId,
     })
 
     const userMsg: Message = {

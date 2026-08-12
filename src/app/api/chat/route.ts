@@ -7,7 +7,6 @@ import { makeSendMessageUseCase, makeConversationRepository } from '@/modules/ch
 const bodySchema = z.object({
   conversationId: z.string().min(1),
   message: z.string().min(1).max(8000),
-  documentId: z.string().min(1).optional(),
 })
 
 export async function POST(request: Request) {
@@ -38,7 +37,6 @@ export async function POST(request: Request) {
     userId,
     conversationId: parsed.data.conversationId,
     userMessage: parsed.data.message,
-    documentId: parsed.data.documentId,
   })
 
   if (!result.ok) {
