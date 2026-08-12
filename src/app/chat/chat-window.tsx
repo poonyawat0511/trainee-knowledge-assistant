@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -10,21 +10,35 @@ interface ChatMessage {
   tokenCount?: number
 }
 
+interface Attachment {
+  id: string
+  filename: string
+  status: 'uploading' | 'done' | 'error'
+  error?: string
+}
+
 export function ChatWindow({
   conversationId,
-  documentId,
+  onConversationCreated,
 }: {
   conversationId: string | null
-  documentId: string | null
+  onConversationCreated: (id: string) => void
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [attachments, setAttachments] = useState<Attachment[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sessionTokens, setSessionTokens] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!conversationId) return
+    if (!conversationId) {
+      setMessages([])
+      setAttachments([])
+      setSessionTokens(0)
+      return
+    }
 
     let cancelled = false
 
@@ -44,13 +58,81 @@ export function ChatWindow({
         setError('Failed to load conversation history')
       })
 
+    fetch(`/api/documents?conversationId=${conversationId}`)
+      .then((r) => r.json())
+      .then((body) => {
+        if (cancelled) return
+        const docs: { id: string; filename: string }[] = body.documents ?? []
+        setAttachments(docs.map((d) => ({ id: d.id, filename: d.filename, status: 'done' as const })))
+      })
+      .catch(() => {
+        if (cancelled) return
+        setAttachments([])
+      })
+
     return () => {
       cancelled = true
     }
   }, [conversationId])
 
+  async function handleAttach(file: File) {
+    const tempId = `pending-${Date.now()}`
+    setAttachments((prev) => [...prev, { id: tempId, filename: file.name, status: 'uploading' }])
+
+    const formData = new FormData()
+    formData.append('file', file)
+    if (conversationId) formData.append('conversationId', conversationId)
+
+    try {
+      const response = await fetch('/api/documents', { method: 'POST', body: formData })
+      const body = await response.json()
+
+      if (!response.ok) {
+        setAttachments((prev) =>
+          prev.map((a) => (a.id === tempId ? { ...a, status: 'error', error: body.error?.message ?? 'Upload failed' } : a))
+        )
+        return
+      }
+
+      if (!conversationId) onConversationCreated(body.conversationId)
+
+      setAttachments((prev) =>
+        prev.map((a) => (a.id === tempId ? { id: body.documentId, filename: body.filename, status: 'done' } : a))
+      )
+    } catch {
+      setAttachments((prev) => prev.map((a) => (a.id === tempId ? { ...a, status: 'error', error: 'Upload failed' } : a)))
+    }
+  }
+
+  function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file) handleAttach(file)
+  }
+
   async function handleSend() {
-    if (!input.trim() || !conversationId) return
+    if (!input.trim() || sending) return
+
+    let activeConversationId = conversationId
+    if (!activeConversationId) {
+      try {
+        const response = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        })
+        const body = await response.json()
+        if (!response.ok) {
+          setError(body.error?.message ?? 'Failed to start a new chat')
+          return
+        }
+        activeConversationId = body.conversation.id
+        onConversationCreated(activeConversationId!)
+      } catch {
+        setError('Failed to start a new chat')
+        return
+      }
+    }
 
     const userMessage = input
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }, { role: 'assistant', content: '' }])
@@ -62,7 +144,7 @@ export function ChatWindow({
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId, message: userMessage, documentId: documentId ?? undefined }),
+        body: JSON.stringify({ conversationId: activeConversationId, message: userMessage }),
       })
 
       if (!response.ok || !response.body) {
@@ -126,7 +208,7 @@ export function ChatWindow({
   return (
     <div className="flex flex-1 flex-col">
       <div className="flex items-center justify-between border-b p-3 text-sm text-gray-600">
-        <span>{documentId ? 'Chatting about uploaded document' : 'General chat'}</span>
+        <span>{conversationId ? 'Chat' : 'New chat'}</span>
         <span>Session tokens: {sessionTokens}</span>
       </div>
 
@@ -148,18 +230,45 @@ export function ChatWindow({
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
 
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-t px-3 pt-2">
+          {attachments.map((a) => (
+            <span
+              key={a.id}
+              className={`rounded-full border px-2 py-1 text-xs ${
+                a.status === 'error' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 bg-gray-50 text-gray-700'
+              }`}
+              title={a.error}
+            >
+              📎 {a.filename}
+              {a.status === 'uploading' && '…'}
+              {a.status === 'error' && ' (failed)'}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="flex gap-2 border-t p-3">
+        <input ref={fileInputRef} type="file" accept=".pdf,.txt" className="hidden" onChange={handleFileInputChange} />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={sending}
+          className="rounded border px-3 py-2 text-sm disabled:opacity-50"
+          title="Attach a PDF or TXT file"
+        >
+          📎
+        </button>
         <input
           className="flex-1 rounded border px-3 py-2 text-sm"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="Ask something…"
-          disabled={!conversationId || sending}
+          disabled={sending}
         />
         <button
           onClick={handleSend}
-          disabled={!conversationId || sending}
+          disabled={sending}
           className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
         >
           {sending ? 'Sending…' : 'Send'}
