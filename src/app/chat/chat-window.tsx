@@ -41,6 +41,7 @@ export function ChatWindow({
     activeConversationIdRef.current = conversationId
 
     if (!conversationId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- necessary to clear state when conversation changes
       setMessages([])
       setAttachments([])
       setSessionTokens(0)

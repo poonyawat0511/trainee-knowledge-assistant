@@ -17,16 +17,16 @@ export default function ChatPage() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchConversations()
-  }, [])
-
   function fetchConversations() {
     fetch('/api/conversations')
       .then((r) => r.json())
       .then((body) => setConversations(body.conversations ?? []))
       .catch(() => setError('Failed to load conversations'))
   }
+
+  useEffect(() => {
+    fetchConversations()
+  }, [])
 
   function handleConversationCreated(id: string) {
     setActiveId(id)

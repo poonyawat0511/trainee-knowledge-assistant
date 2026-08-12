@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { UploadDocumentUseCase } from './upload-document-use-case'
 import type { DocumentRepository, TextExtractor, IdGenerator } from './ports'
 
-const ALLOWED_TYPES = ['application/pdf', 'text/plain']
 const MAX_BYTES = 10 * 1024 * 1024
 
 function makeUseCase(overrides: {
