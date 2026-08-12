@@ -20,6 +20,7 @@ export class SendMessageUseCase {
     const history = await this.messages.listByConversation(input.conversationId)
     const systemPrompt = await this.buildContext.execute({
       userId: input.userId,
+      conversationId: input.conversationId,
       documentId: input.documentId,
     })
 

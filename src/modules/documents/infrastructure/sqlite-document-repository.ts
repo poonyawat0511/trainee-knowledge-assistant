@@ -5,6 +5,7 @@ import type { Document } from '../domain/document'
 interface DocumentRow {
   id: string
   user_id: string
+  conversation_id: string
   filename: string
   mime_type: string
   size_bytes: number
@@ -16,6 +17,7 @@ function toDocument(row: DocumentRow): Document {
   return {
     id: row.id,
     userId: row.user_id,
+    conversationId: row.conversation_id,
     filename: row.filename,
     mimeType: row.mime_type,
     sizeBytes: row.size_bytes,
@@ -29,10 +31,10 @@ export class SqliteDocumentRepository implements DocumentRepository {
     const db = await getDb()
     db
       .prepare(
-        `INSERT INTO documents (id, user_id, filename, mime_type, size_bytes, content_text, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO documents (id, user_id, conversation_id, filename, mime_type, size_bytes, content_text, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(doc.id, doc.userId, doc.filename, doc.mimeType, doc.sizeBytes, doc.contentText, doc.createdAt)
+      .run(doc.id, doc.userId, doc.conversationId, doc.filename, doc.mimeType, doc.sizeBytes, doc.contentText, doc.createdAt)
   }
 
   async findById(id: string, userId: string): Promise<Document | null> {
@@ -41,6 +43,14 @@ export class SqliteDocumentRepository implements DocumentRepository {
       .prepare('SELECT * FROM documents WHERE id = ? AND user_id = ?')
       .get(id, userId) as DocumentRow | undefined
     return row ? toDocument(row) : null
+  }
+
+  async listByConversation(conversationId: string, userId: string): Promise<Document[]> {
+    const db = await getDb()
+    const rows = db
+      .prepare('SELECT * FROM documents WHERE conversation_id = ? AND user_id = ? ORDER BY created_at ASC')
+      .all(conversationId, userId) as unknown as DocumentRow[]
+    return rows.map(toDocument)
   }
 
   async listByUser(userId: string): Promise<Document[]> {

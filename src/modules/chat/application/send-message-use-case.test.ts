@@ -14,7 +14,7 @@ function makeUseCase(overrides: { ai?: Partial<AiProvider> } = {}) {
     ...overrides.ai,
   }
   const ids: IdGenerator = { generate: vi.fn(() => 'msg-1') }
-  const lookup: DocumentTextLookup = { getContentText: vi.fn(async () => null) }
+  const lookup: DocumentTextLookup = { listContentTexts: vi.fn(async () => []), getContentText: vi.fn(async () => null) }
   const context = new BuildContextUseCase(lookup)
   const useCase = new SendMessageUseCase(messages, ai, ids, context)
   return { useCase, messages, ai }

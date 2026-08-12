@@ -14,6 +14,7 @@ export class UploadDocumentUseCase {
 
   async execute(input: {
     userId: string
+    conversationId: string
     filename: string
     mimeType: string
     buffer: Buffer
@@ -33,6 +34,7 @@ export class UploadDocumentUseCase {
     const doc: Document = {
       id: this.ids.generate(),
       userId: input.userId,
+      conversationId: input.conversationId,
       filename: input.filename,
       mimeType: input.mimeType,
       sizeBytes: input.buffer.byteLength,

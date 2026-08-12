@@ -32,7 +32,7 @@ pnpm dev
 ## Features Done
 
 - [x] Login + Protected Routes (bcrypt + JWT session cookie, `proxy.ts` guard)
-- [x] File Upload (PDF/TXT, type/size validation, no raw file persisted to disk — only extracted text)
+- [x] File Upload (inline attach in the chat compose box, PDF/TXT, type/size validation, no raw file persisted to disk — only extracted text; each conversation only sees the documents attached to it)
 - [x] Chat with AI (OpenRouter, timeout + retry-on-network-failure, error handling)
 - [x] Chat with Uploaded File Context (document text injected into chat context, truncated to a token budget for large files)
 - [x] Token Usage Counter (per-message and running session total)
@@ -43,7 +43,6 @@ pnpm dev
 - [x] Docker Compose + healthcheck (see Known Issues — not confirmed working end-to-end in the sandbox this was built in)
 - [x] Unit tests (application-layer use-cases, mocked ports)
 - [ ] RAG with Vector DB (not done — see `DECISIONS.md`)
-- [ ] Citation of source spans (depends on RAG chunking, skipped alongside it)
 
 ## Architecture
 
