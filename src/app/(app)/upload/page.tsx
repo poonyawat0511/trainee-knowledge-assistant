@@ -54,12 +54,16 @@ export default function UploadPage() {
           </p>
           <Input type="file" accept=".pdf,.txt" onChange={handleUpload} disabled={status === 'uploading'} />
           {status === 'uploading' && <p className="text-sm text-muted-foreground">Uploading…</p>}
-          <Link href="/chat">
-            <Button variant="ghost" className="w-full justify-start gap-2">
-              <ArrowLeft className="size-4" />
-              Back to chat
-            </Button>
-          </Link>
+          <Button
+            render={
+              <Link href="/chat">
+                <ArrowLeft className="size-4" />
+                Back to chat
+              </Link>
+            }
+            variant="ghost"
+            className="w-full justify-start gap-2"
+          />
         </CardContent>
       </Card>
     </div>
