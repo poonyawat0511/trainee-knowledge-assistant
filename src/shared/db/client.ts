@@ -102,6 +102,16 @@ export function getDb(): Promise<DbLike> {
     )
     wrapped.exec(schema)
 
+    // Idempotent migration: databases created before `conversation_id` was
+    // added to the schema won't get it from `CREATE TABLE IF NOT EXISTS`
+    // (that only runs for brand-new tables). SQLite has no `ADD COLUMN IF
+    // NOT EXISTS`, so attempt it and ignore the "duplicate column" failure.
+    try {
+      wrapped.exec('ALTER TABLE documents ADD COLUMN conversation_id TEXT REFERENCES conversations(id)')
+    } catch {
+      // column already exists
+    }
+
     return wrapped
   })()
 
