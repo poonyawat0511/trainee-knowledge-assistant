@@ -2,10 +2,25 @@ import type { AiProvider } from '../application/ports'
 
 const MODEL = 'openai/gpt-oss-20b:free'
 const TIMEOUT_MS = 30_000
+// OpenRouter's free-tier models share a rate-limited pool upstream; a 429
+// there is routine and typically clears within seconds (confirmed via the
+// API's own `retry_after_seconds` hint), unlike a permanent 4xx like 400/401.
+// 502/503/504 are similarly transient (upstream provider hiccup). Any other
+// status (400, 401, 404, ...) is not retried — retrying those only doubles
+// latency for a request that will never succeed.
+const RETRYABLE_STATUSES = new Set([429, 502, 503, 504])
+const RETRY_DELAY_MS = 1500
 
-/** Thrown when OpenRouter responds with a non-2xx status. Never retried — a
- * 4xx/5xx will not succeed on retry, so retrying only doubles latency. */
-class HttpStatusError extends Error {}
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Thrown when OpenRouter responds with a non-2xx status. */
+class HttpStatusError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+  }
+}
 
 export class OpenRouterProvider implements AiProvider {
   async complete(input: {
@@ -28,7 +43,11 @@ export class OpenRouterProvider implements AiProvider {
     try {
       return await attempt()
     } catch (error) {
-      if (error instanceof HttpStatusError) throw error
+      if (error instanceof HttpStatusError) {
+        if (!RETRYABLE_STATUSES.has(error.status)) throw error
+        await sleep(RETRY_DELAY_MS)
+        return await attempt()
+      }
       // one retry on genuine network failure (fetch rejection, timeout abort, etc.)
       return await attempt()
     }
@@ -53,7 +72,7 @@ export class OpenRouterProvider implements AiProvider {
       })
 
       if (!response.ok) {
-        throw new HttpStatusError(`OpenRouter error: ${response.status}`)
+        throw new HttpStatusError(`OpenRouter error: ${response.status}`, response.status)
       }
 
       const data = await response.json()
@@ -66,13 +85,10 @@ export class OpenRouterProvider implements AiProvider {
     }
   }
 
-  async *completeStream(input: {
-    systemPrompt?: string
-    messages: { role: 'user' | 'assistant'; content: string }[]
-  }): AsyncIterable<import('../application/ports').StreamChunk> {
-    const apiKey = process.env.OPENROUTER_API_KEY
-    if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set')
-
+  private async connectStream(
+    apiKey: string,
+    input: { systemPrompt?: string; messages: { role: 'user' | 'assistant'; content: string }[] }
+  ): Promise<Response> {
     // Timeout applies only to the initial connection (time to receive
     // response headers), not the full stream duration — SSE replies can
     // legitimately run longer than TIMEOUT_MS for long completions, but a
@@ -80,9 +96,8 @@ export class OpenRouterProvider implements AiProvider {
     const controller = new AbortController()
     const connectTimeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
-    let response: Response
     try {
-      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -99,12 +114,41 @@ export class OpenRouterProvider implements AiProvider {
         }),
         signal: controller.signal,
       })
+
+      if (!response.ok) {
+        throw new HttpStatusError(`OpenRouter stream error: ${response.status}`, response.status)
+      }
+
+      return response
     } finally {
       clearTimeout(connectTimeout)
     }
+  }
 
-    if (!response.ok || !response.body) {
-      throw new Error(`OpenRouter stream error: ${response.status}`)
+  async *completeStream(input: {
+    systemPrompt?: string
+    messages: { role: 'user' | 'assistant'; content: string }[]
+  }): AsyncIterable<import('../application/ports').StreamChunk> {
+    const apiKey = process.env.OPENROUTER_API_KEY
+    if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set')
+
+    const connect = () => this.connectStream(apiKey, input)
+
+    let response: Response
+    try {
+      response = await connect()
+    } catch (error) {
+      if (error instanceof HttpStatusError) {
+        if (!RETRYABLE_STATUSES.has(error.status)) throw error
+        await sleep(RETRY_DELAY_MS)
+        response = await connect()
+      } else {
+        throw error
+      }
+    }
+
+    if (!response.body) {
+      throw new Error('OpenRouter stream error: no response body')
     }
 
     const reader = response.body.getReader()

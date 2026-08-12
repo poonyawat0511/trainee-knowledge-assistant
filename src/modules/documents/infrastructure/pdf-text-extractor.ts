@@ -1,3 +1,4 @@
+import './pdf-polyfills'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { PDFParse } from 'pdf-parse'
