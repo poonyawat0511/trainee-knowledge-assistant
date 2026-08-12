@@ -31,8 +31,15 @@ export function ChatWindow({
   const [error, setError] = useState<string | null>(null)
   const [sessionTokens, setSessionTokens] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Tracks the conversation id this component instance is currently using. Seeded from the
+  // conversationId prop and updated synchronously whenever handleAttach/handleSend lazily
+  // create a new conversation, so a second call in the same "prop hasn't re-rendered yet"
+  // window reuses it instead of creating a duplicate conversation.
+  const activeConversationIdRef = useRef<string | null>(conversationId)
 
   useEffect(() => {
+    activeConversationIdRef.current = conversationId
+
     if (!conversationId) {
       setMessages([])
       setAttachments([])
@@ -81,7 +88,8 @@ export function ChatWindow({
 
     const formData = new FormData()
     formData.append('file', file)
-    if (conversationId) formData.append('conversationId', conversationId)
+    const existingConversationId = activeConversationIdRef.current
+    if (existingConversationId) formData.append('conversationId', existingConversationId)
 
     try {
       const response = await fetch('/api/documents', { method: 'POST', body: formData })
@@ -94,7 +102,10 @@ export function ChatWindow({
         return
       }
 
-      if (!conversationId) onConversationCreated(body.conversationId)
+      if (!existingConversationId) {
+        activeConversationIdRef.current = body.conversationId
+        onConversationCreated(body.conversationId)
+      }
 
       setAttachments((prev) =>
         prev.map((a) => (a.id === tempId ? { id: body.documentId, filename: body.filename, status: 'done' } : a))
@@ -113,7 +124,7 @@ export function ChatWindow({
   async function handleSend() {
     if (!input.trim() || sending) return
 
-    let activeConversationId = conversationId
+    let activeConversationId = activeConversationIdRef.current
     if (!activeConversationId) {
       try {
         const response = await fetch('/api/conversations', {
@@ -127,6 +138,7 @@ export function ChatWindow({
           return
         }
         activeConversationId = body.conversation.id
+        activeConversationIdRef.current = activeConversationId
         onConversationCreated(activeConversationId!)
       } catch {
         setError('Failed to start a new chat')
