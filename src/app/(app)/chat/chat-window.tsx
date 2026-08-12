@@ -3,18 +3,14 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Send } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   tokenCount?: number
-}
-
-interface Attachment {
-  id: string
-  filename: string
-  status: 'uploading' | 'done' | 'error'
-  error?: string
 }
 
 /**
@@ -43,21 +39,18 @@ export function ChatWindow({
   documentId: string | null
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [attachments, setAttachments] = useState<Attachment[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sessionTokens, setSessionTokens] = useState(0)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   // Tracks the conversation id this component instance is currently using. Seeded from the
-  // conversationId prop and updated synchronously whenever handleAttach/handleSend lazily
-  // create a new conversation, so a second call in the same "prop hasn't re-rendered yet"
-  // window reuses it instead of creating a duplicate conversation.
+  // conversationId prop and updated synchronously whenever handleSend lazily creates a new
+  // conversation, so a second Enter in the same "prop hasn't re-rendered yet" window reuses it
+  // instead of creating a duplicate conversation.
   const activeConversationIdRef = useRef<string | null>(conversationId)
   // Holds the in-flight POST /api/conversations promise while a conversation is being created
-  // lazily. Set synchronously (before any await) by whichever caller starts the creation, so a
-  // concurrent caller in the same window awaits the SAME promise rather than creating a second
-  // conversation. Cleared on failure so a later attempt can retry.
+  // lazily, so a concurrent caller in the same window awaits the SAME promise. Cleared on
+  // failure so a later attempt can retry.
   const conversationCreationRef = useRef<Promise<string> | null>(null)
   // The id of the conversation this component itself just created. While the prop is catching up
   // to it, the history effect must not refetch/overwrite the optimistic local state.
@@ -71,14 +64,10 @@ export function ChatWindow({
 
   useEffect(() => {
     if (conversationId && conversationId === selfCreatedIdRef.current) {
-      // This component created this conversation itself; the optimistic local state is already
-      // correct and more complete than anything the server can return mid-stream. Do not fetch,
-      // do not reset.
       activeConversationIdRef.current = conversationId
       return
     }
 
-    // A real conversation change: abandon any in-flight stream and start clean.
     streamGenerationRef.current += 1
     selfCreatedIdRef.current = null
     conversationCreationRef.current = null
@@ -87,7 +76,6 @@ export function ChatWindow({
     if (!conversationId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- necessary to clear state when conversation changes
       setMessages([])
-      setAttachments([])
       setSessionTokens(0)
       setError(null)
       return
@@ -111,29 +99,11 @@ export function ChatWindow({
         setError('Failed to load conversation history')
       })
 
-    fetch(`/api/documents?conversationId=${conversationId}`)
-      .then((r) => r.json())
-      .then((body) => {
-        if (cancelled) return
-        const docs: { id: string; filename: string }[] = body.documents ?? []
-        setAttachments(docs.map((d) => ({ id: d.id, filename: d.filename, status: 'done' as const })))
-      })
-      .catch(() => {
-        if (cancelled) return
-        setAttachments([])
-      })
-
     return () => {
       cancelled = true
     }
   }, [conversationId])
 
-  /**
-   * Returns the conversation id to use, creating one lazily if this is still an unsaved chat.
-   *
-   * The check-and-set of `conversationCreationRef` happens synchronously, before any await, so
-   * two concurrent callers (e.g. an upload and a send fired back-to-back) share one creation.
-   */
   function ensureConversationId(): Promise<string> {
     const existing = activeConversationIdRef.current
     if (existing) return Promise.resolve(existing)
@@ -159,58 +129,14 @@ export function ChatWindow({
 
     conversationCreationRef.current = creation
     creation.catch(() => {
-      // Allow a retry after a failed creation instead of latching the rejected promise forever.
       if (conversationCreationRef.current === creation) conversationCreationRef.current = null
     })
 
     return creation
   }
 
-  async function handleAttach(file: File) {
-    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    setAttachments((prev) => [...prev, { id: tempId, filename: file.name, status: 'uploading' }])
-
-    function failAttachment(message: string) {
-      setAttachments((prev) => prev.map((a) => (a.id === tempId ? { ...a, status: 'error', error: message } : a)))
-    }
-
-    // Started synchronously so a send racing this upload joins the same creation.
-    const conversationIdPromise = ensureConversationId()
-
-    try {
-      const targetConversationId = await conversationIdPromise
-
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('conversationId', targetConversationId)
-
-      const response = await fetch('/api/documents', { method: 'POST', body: formData })
-      const body = await response.json().catch(() => null)
-
-      if (!response.ok) {
-        failAttachment(body?.error?.message ?? 'Upload failed')
-        return
-      }
-
-      setAttachments((prev) =>
-        prev.map((a) => (a.id === tempId ? { id: body.documentId, filename: body.filename, status: 'done' } : a))
-      )
-    } catch {
-      failAttachment('Upload failed')
-    }
-  }
-
-  function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (file) handleAttach(file)
-  }
-
   async function handleSend() {
     const userMessage = input
-    // sendingRef mirrors `sending` synchronously: a second Enter pressed before React re-renders
-    // (i.e. during the conversation-creation await) is rejected here rather than starting a
-    // second send that would create a second conversation.
     if (!userMessage.trim() || sendingRef.current) return
 
     sendingRef.current = true
@@ -227,7 +153,6 @@ export function ChatWindow({
       return
     }
 
-    // Anything that switches conversation from here on invalidates this stream.
     const generation = streamGenerationRef.current
     const isCurrent = () => streamGenerationRef.current === generation
 
@@ -254,7 +179,6 @@ export function ChatWindow({
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        // The user switched conversation / hit New chat: stop consuming and touch no state.
         if (!isCurrent()) {
           await reader.cancel().catch(() => {})
           return
@@ -300,8 +224,8 @@ export function ChatWindow({
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <div className="flex items-center justify-between border-b p-3 text-sm text-gray-600">
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b px-4 py-2 text-sm text-muted-foreground">
         <span>{conversationId ? 'Chat' : 'New chat'}</span>
         <span>Session tokens: {sessionTokens}</span>
       </div>
@@ -311,7 +235,7 @@ export function ChatWindow({
           <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}>
             <div
               className={`inline-block max-w-lg rounded-lg px-3 py-2 text-sm ${
-                m.role === 'user' ? 'bg-black text-white' : 'bg-gray-100'
+                m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
               }`}
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
@@ -321,52 +245,21 @@ export function ChatWindow({
             </div>
           </div>
         ))}
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-2 border-t px-3 pt-2">
-          {attachments.map((a) => (
-            <span
-              key={a.id}
-              className={`rounded-full border px-2 py-1 text-xs ${
-                a.status === 'error' ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300 bg-gray-50 text-gray-700'
-              }`}
-              title={a.error}
-            >
-              📎 {a.filename}
-              {a.status === 'uploading' && '…'}
-              {a.status === 'error' && ' (failed)'}
-            </span>
-          ))}
-        </div>
-      )}
-
       <div className="flex gap-2 border-t p-3">
-        <input ref={fileInputRef} type="file" accept=".pdf,.txt" className="hidden" onChange={handleFileInputChange} />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={sending}
-          className="rounded border px-3 py-2 text-sm disabled:opacity-50"
-          title="Attach a PDF or TXT file"
-        >
-          📎
-        </button>
-        <input
-          className="flex-1 rounded border px-3 py-2 text-sm"
+        <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="Ask something…"
           disabled={sending}
         />
-        <button
-          onClick={handleSend}
-          disabled={sending}
-          className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
-        >
+        <Button onClick={handleSend} disabled={sending}>
+          <Send className="size-4" />
           {sending ? 'Sending…' : 'Send'}
-        </button>
+        </Button>
       </div>
     </div>
   )
