@@ -21,6 +21,14 @@ export async function POST(request: Request) {
     const conversation = { id: randomUUID(), userId, title: 'New chat', createdAt: new Date().toISOString() }
     await makeConversationRepository().save(conversation)
     conversationId = conversation.id
+  } else {
+    // A client-supplied conversationId must belong to the caller, same as every other
+    // conversation-scoped route. Without this an authenticated user could attach documents
+    // into someone else's conversation.
+    const conversation = await makeConversationRepository().findById(conversationId, userId)
+    if (!conversation) {
+      return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'Conversation not found' } }, { status: 404 })
+    }
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
