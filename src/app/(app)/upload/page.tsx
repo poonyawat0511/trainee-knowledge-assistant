@@ -7,9 +7,11 @@ import { Upload as UploadIcon, ArrowLeft } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useAppShell } from '@/components/app-shell/app-shell-context'
 
 export default function UploadPage() {
   const [status, setStatus] = useState<'idle' | 'uploading' | 'done'>('idle')
+  const { refreshDocuments } = useAppShell()
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -33,6 +35,7 @@ export default function UploadPage() {
 
       setStatus('done')
       toast.success(`Uploaded "${body.filename}" (${body.charCount} characters extracted)`)
+      refreshDocuments()
     } catch {
       setStatus('idle')
       toast.error('Upload failed')

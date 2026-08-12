@@ -1,12 +1,14 @@
 'use client'
 
 import { Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppShell } from './app-shell-context'
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { conversations, activeConversationId, setActiveConversationId } = useAppShell()
+  const router = useRouter()
 
   return (
     <div className="flex h-full w-64 shrink-0 flex-col border-r bg-card">
@@ -15,6 +17,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           className="w-full justify-start gap-2"
           onClick={() => {
             setActiveConversationId(null)
+            router.push('/chat')
             onNavigate?.()
           }}
         >
@@ -31,6 +34,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 className="w-full justify-start truncate"
                 onClick={() => {
                   setActiveConversationId(c.id)
+                  router.push('/chat')
                   onNavigate?.()
                 }}
               >

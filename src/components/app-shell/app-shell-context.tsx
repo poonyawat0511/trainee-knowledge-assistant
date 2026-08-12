@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 export interface ConversationSummary {
   id: string
@@ -36,14 +37,14 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
     fetch('/api/conversations')
       .then((r) => r.json())
       .then((body) => setConversations(body.conversations ?? []))
-      .catch(() => {})
+      .catch(() => toast.error('Failed to load conversations'))
   }, [])
 
   const refreshDocuments = useCallback(() => {
     fetch('/api/documents')
       .then((r) => r.json())
       .then((body) => setDocuments(body.documents ?? []))
-      .catch(() => {})
+      .catch(() => toast.error('Failed to load documents'))
   }, [])
 
   useEffect(() => {
