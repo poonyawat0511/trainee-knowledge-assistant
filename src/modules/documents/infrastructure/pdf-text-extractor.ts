@@ -1,5 +1,6 @@
 import './pdf-polyfills'
-import { createRequire } from 'node:module'
+import fs from 'node:fs'
+import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { PDFParse } from 'pdf-parse'
 import type { TextExtractor } from '../application/ports'
@@ -7,9 +8,23 @@ import type { TextExtractor } from '../application/ports'
 // pdf-parse's underlying pdfjs-dist engine dynamically imports its worker
 // script at parse time using a path relative to its own bundled module.
 // Under Next.js's server bundler that relative path doesn't resolve, so we
-// resolve the real on-disk worker file (via pdf-parse's own dependency
-// resolution, since pnpm doesn't hoist pdfjs-dist to our package) and point
-// pdfjs-dist's GlobalWorkerOptions at it explicitly before the first parse.
+// resolve the real on-disk worker file ourselves and point pdfjs-dist's
+// GlobalWorkerOptions at it explicitly before the first parse.
+//
+// This deliberately does NOT use `require.resolve()` (even via
+// `createRequire`) or `import.meta.resolve()`: both were observed to behave
+// differently between `next dev` and a production standalone build under
+// Turbopack — in the production build, `require.resolve('pdf-parse')`
+// returned an internal Turbopack module id (a number) instead of a real
+// file path, breaking the "resolve pdfjs-dist relative to pdf-parse's own
+// dependency context" trick this previously relied on
+// (`require.resolve(x, { paths: [...] })`) with a runtime
+// `TypeError: The "paths[0]" argument must be of type string`. Plain `fs`
+// calls are not part of module resolution, so Turbopack has no reason to
+// intercept them — walking the pnpm virtual store directly from
+// `process.cwd()` (matching the same anchor already used for
+// `schema.sql`'s path elsewhere in this codebase) is robust across both
+// `next dev` and a production/Docker build.
 //
 // IMPORTANT — no code-level recovery if this runs too late: pdfjs-dist's
 // `PDFWorker._setupFakeWorkerGlobal` is a class-level static getter that
@@ -24,14 +39,53 @@ import type { TextExtractor } from '../application/ports'
 // edits. There is no in-process retry that can clear this; the only fix is
 // a full process restart (e.g. restarting `next dev`, or a fresh deploy).
 let workerConfigured = false
+
+function findPdfWorkerPath(): string {
+  // The Dockerfile's `deps` stage copies the worker file to this fixed,
+  // version-independent location, because Next's file tracer never learns
+  // it needs to bundle pdf.worker.mjs into the standalone build output (we
+  // load it dynamically at runtime via a path Turbopack can't statically
+  // see) — confirmed missing via `find .next/standalone -iname
+  // pdf.worker.mjs` returning nothing after a real production build. Check
+  // this vendored copy first; it's the only path that exists in the Docker
+  // runner image.
+  const vendoredPath = path.join(process.cwd(), 'vendor', 'pdf-worker', 'pdf.worker.mjs')
+  if (fs.existsSync(vendoredPath)) return vendoredPath
+
+  // Local/dev fallback: search the real pnpm virtual store directly.
+  let dir = process.cwd()
+
+  while (true) {
+    const pnpmDir = path.join(dir, 'node_modules', '.pnpm')
+    if (fs.existsSync(pnpmDir)) {
+      const pdfjsDirName = fs.readdirSync(pnpmDir).find((entry) => entry.startsWith('pdfjs-dist@'))
+      if (pdfjsDirName) {
+        const workerPath = path.join(
+          pnpmDir,
+          pdfjsDirName,
+          'node_modules',
+          'pdfjs-dist',
+          'legacy',
+          'build',
+          'pdf.worker.mjs'
+        )
+        if (fs.existsSync(workerPath)) return workerPath
+      }
+    }
+
+    const parentDir = path.dirname(dir)
+    if (parentDir === dir) break
+    dir = parentDir
+  }
+
+  throw new Error(
+    `Could not locate pdfjs-dist's worker file under node_modules/.pnpm starting from ${process.cwd()}`
+  )
+}
+
 function ensureWorkerConfigured(): void {
   if (workerConfigured) return
-  const require = createRequire(import.meta.url)
-  const pdfParseEntry = require.resolve('pdf-parse')
-  const workerPath = require.resolve(
-    /* turbopackIgnore: true */ 'pdfjs-dist/legacy/build/pdf.worker.mjs',
-    { paths: [pdfParseEntry] }
-  )
+  const workerPath = findPdfWorkerPath()
   PDFParse.setWorker(pathToFileURL(workerPath).href)
   workerConfigured = true
 }
