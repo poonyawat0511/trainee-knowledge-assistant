@@ -26,7 +26,8 @@ function toDocument(row: DocumentRow): Document {
 
 export class SqliteDocumentRepository implements DocumentRepository {
   async save(doc: Document): Promise<void> {
-    getDb()
+    const db = await getDb()
+    db
       .prepare(
         `INSERT INTO documents (id, user_id, filename, mime_type, size_bytes, content_text, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`
@@ -35,16 +36,18 @@ export class SqliteDocumentRepository implements DocumentRepository {
   }
 
   async findById(id: string, userId: string): Promise<Document | null> {
-    const row = getDb()
+    const db = await getDb()
+    const row = db
       .prepare('SELECT * FROM documents WHERE id = ? AND user_id = ?')
       .get(id, userId) as DocumentRow | undefined
     return row ? toDocument(row) : null
   }
 
   async listByUser(userId: string): Promise<Document[]> {
-    const rows = getDb()
+    const db = await getDb()
+    const rows = db
       .prepare('SELECT * FROM documents WHERE user_id = ? ORDER BY created_at DESC')
-      .all(userId) as DocumentRow[]
+      .all(userId) as unknown as DocumentRow[]
     return rows.map(toDocument)
   }
 }

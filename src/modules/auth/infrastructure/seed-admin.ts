@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { getDb } from '@/shared/db/client'
 
 export async function seedAdmin(): Promise<void> {
-  const db = getDb()
+  const db = await getDb()
   const existing = db
     .prepare('SELECT id FROM users WHERE username = ?')
     .get('admin')

@@ -15,22 +15,25 @@ function toConversation(row: ConversationRow): Conversation {
 
 export class SqliteConversationRepository implements ConversationRepository {
   async save(conversation: Conversation): Promise<void> {
-    getDb()
+    const db = await getDb()
+    db
       .prepare('INSERT INTO conversations (id, user_id, title, created_at) VALUES (?, ?, ?, ?)')
       .run(conversation.id, conversation.userId, conversation.title, conversation.createdAt)
   }
 
   async findById(id: string, userId: string): Promise<Conversation | null> {
-    const row = getDb()
+    const db = await getDb()
+    const row = db
       .prepare('SELECT * FROM conversations WHERE id = ? AND user_id = ?')
       .get(id, userId) as ConversationRow | undefined
     return row ? toConversation(row) : null
   }
 
   async listByUser(userId: string): Promise<Conversation[]> {
-    const rows = getDb()
+    const db = await getDb()
+    const rows = db
       .prepare('SELECT * FROM conversations WHERE user_id = ? ORDER BY created_at DESC')
-      .all(userId) as ConversationRow[]
+      .all(userId) as unknown as ConversationRow[]
     return rows.map(toConversation)
   }
 }

@@ -11,7 +11,8 @@ interface UserRow {
 
 export class SqliteUserRepository implements UserRepository {
   async findByUsername(username: string): Promise<User | null> {
-    const row = getDb()
+    const db = await getDb()
+    const row = db
       .prepare('SELECT * FROM users WHERE username = ?')
       .get(username) as UserRow | undefined
 
