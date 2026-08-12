@@ -3,33 +3,34 @@ import { BuildContextUseCase } from './build-context-use-case'
 import type { DocumentTextLookup } from './ports'
 
 describe('BuildContextUseCase', () => {
-  it('returns null when no documentId is given', async () => {
-    const lookup: DocumentTextLookup = { getContentText: vi.fn() }
+  it('returns null when the conversation has no documents', async () => {
+    const lookup: DocumentTextLookup = { listContentTexts: vi.fn(async () => []) }
     const useCase = new BuildContextUseCase(lookup)
-    expect(await useCase.execute({ userId: 'u1' })).toBeNull()
-    expect(lookup.getContentText).not.toHaveBeenCalled()
+    expect(await useCase.execute({ userId: 'u1', conversationId: 'c1' })).toBeNull()
   })
 
-  it('returns a system prompt built from the document text', async () => {
-    const lookup: DocumentTextLookup = {
-      getContentText: vi.fn(async () => 'The quick brown fox'),
-    }
+  it('returns a system prompt built from a single document', async () => {
+    const lookup: DocumentTextLookup = { listContentTexts: vi.fn(async () => ['The quick brown fox']) }
     const useCase = new BuildContextUseCase(lookup)
-    const prompt = await useCase.execute({ userId: 'u1', documentId: 'doc-1' })
+    const prompt = await useCase.execute({ userId: 'u1', conversationId: 'c1' })
     expect(prompt).toContain('The quick brown fox')
   })
 
-  it('truncates content that exceeds the token budget', async () => {
-    const longText = 'a'.repeat(50_000)
-    const lookup: DocumentTextLookup = { getContentText: vi.fn(async () => longText) }
-    const useCase = new BuildContextUseCase(lookup, { maxChars: 1000 })
-    const prompt = await useCase.execute({ userId: 'u1', documentId: 'doc-1' })
-    expect(prompt!.length).toBeLessThan(1200)
+  it('concatenates text from multiple documents into one prompt', async () => {
+    const lookup: DocumentTextLookup = {
+      listContentTexts: vi.fn(async () => ['first document text', 'second document text']),
+    }
+    const useCase = new BuildContextUseCase(lookup)
+    const prompt = await useCase.execute({ userId: 'u1', conversationId: 'c1' })
+    expect(prompt).toContain('first document text')
+    expect(prompt).toContain('second document text')
   })
 
-  it('returns null when the document is not found', async () => {
-    const lookup: DocumentTextLookup = { getContentText: vi.fn(async () => null) }
-    const useCase = new BuildContextUseCase(lookup)
-    expect(await useCase.execute({ userId: 'u1', documentId: 'missing' })).toBeNull()
+  it('truncates the combined content that exceeds the token budget', async () => {
+    const longText = 'a'.repeat(50_000)
+    const lookup: DocumentTextLookup = { listContentTexts: vi.fn(async () => [longText, longText]) }
+    const useCase = new BuildContextUseCase(lookup, { maxChars: 1000 })
+    const prompt = await useCase.execute({ userId: 'u1', conversationId: 'c1' })
+    expect(prompt!.length).toBeLessThan(1200)
   })
 })

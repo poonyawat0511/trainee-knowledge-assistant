@@ -11,17 +11,16 @@ export class BuildContextUseCase {
     this.maxChars = options.maxChars ?? 12_000
   }
 
-  async execute(input: { userId: string; documentId?: string }): Promise<string | null> {
-    if (!input.documentId) return null
+  async execute(input: { userId: string; conversationId: string }): Promise<string | null> {
+    const texts = await this.lookup.listContentTexts(input.conversationId, input.userId)
+    if (texts.length === 0) return null
 
-    const text = await this.lookup.getContentText(input.documentId, input.userId)
-    if (!text) return null
-
-    const truncated = text.length > this.maxChars ? text.slice(0, this.maxChars) : text
+    const combined = texts.join('\n\n---\n\n')
+    const truncated = combined.length > this.maxChars ? combined.slice(0, this.maxChars) : combined
 
     return [
-      'You are a helpful assistant answering questions about the following document.',
-      'Only use information from the document below; say so if the answer is not in it.',
+      'You are a helpful assistant answering questions about the following document(s).',
+      'Only use information from the document(s) below; say so if the answer is not in them.',
       '---',
       truncated,
       '---',

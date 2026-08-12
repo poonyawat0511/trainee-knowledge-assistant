@@ -30,7 +30,7 @@ export interface AiProvider {
 }
 
 export interface DocumentTextLookup {
-  getContentText(documentId: string, userId: string): Promise<string | null>
+  listContentTexts(conversationId: string, userId: string): Promise<string[]>
 }
 
 export interface IdGenerator {
