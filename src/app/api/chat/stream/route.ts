@@ -7,6 +7,7 @@ import { makeConversationRepository, makeStreamMessageUseCase } from '@/modules/
 const bodySchema = z.object({
   conversationId: z.string().min(1),
   message: z.string().min(1).max(8000),
+  documentId: z.string().min(1).optional(),
 })
 
 export async function POST(request: Request) {
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: { code: 'INVALID_BODY', message: 'Invalid chat request' } }, { status: 400 })
   }
 
-  const { conversationId, message } = parsed.data
+  const { conversationId, message, documentId } = parsed.data
 
   const conversation = await makeConversationRepository().findById(conversationId, userId)
   if (!conversation) {
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
       const encoder = new TextEncoder()
 
       try {
-        for await (const chunk of streamMessage.execute({ userId, conversationId, userMessage: message })) {
+        for await (const chunk of streamMessage.execute({ userId, conversationId, userMessage: message, documentId })) {
           if (chunk.done) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, tokenCount: chunk.tokenCount })}\n\n`))
           } else {

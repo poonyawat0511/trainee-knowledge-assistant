@@ -59,11 +59,10 @@ export async function GET(request: Request) {
   }
 
   const conversationId = new URL(request.url).searchParams.get('conversationId')
-  if (!conversationId) {
-    return NextResponse.json({ error: { code: 'INVALID_BODY', message: 'conversationId query param is required' } }, { status: 400 })
-  }
+  const docs = conversationId
+    ? await makeDocumentRepository().listByConversation(conversationId, userId)
+    : await makeDocumentRepository().listByUser(userId)
 
-  const docs = await makeDocumentRepository().listByConversation(conversationId, userId)
   return NextResponse.json({
     documents: docs.map((d) => ({ id: d.id, filename: d.filename, createdAt: d.createdAt })),
   })

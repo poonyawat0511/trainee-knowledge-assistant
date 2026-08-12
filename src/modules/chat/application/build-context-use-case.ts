@@ -11,8 +11,20 @@ export class BuildContextUseCase {
     this.maxChars = options.maxChars ?? 12_000
   }
 
-  async execute(input: { userId: string; conversationId: string }): Promise<string | null> {
+  async execute(input: { userId: string; conversationId: string; documentId?: string }): Promise<string | null> {
     const texts = await this.lookup.listContentTexts(input.conversationId, input.userId)
+
+    // The document-context selector (chat/page.tsx) lets a user pick any of
+    // their own uploaded documents as extra context, independent of what's
+    // attached to the current conversation. Append it if it isn't already
+    // one of the conversation's own attached documents.
+    if (input.documentId) {
+      const explicitText = await this.lookup.getContentText(input.documentId, input.userId)
+      if (explicitText && !texts.includes(explicitText)) {
+        texts.push(explicitText)
+      }
+    }
+
     if (texts.length === 0) return null
 
     const combined = texts.join('\n\n---\n\n')

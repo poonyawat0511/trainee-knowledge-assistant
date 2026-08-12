@@ -13,6 +13,7 @@ function makeUseCase(overrides: {
     save: vi.fn(async () => {}),
     findById: vi.fn(async () => null),
     listByConversation: vi.fn(async () => []),
+    listByUser: vi.fn(async () => []),
     ...overrides.repo,
   }
   const extractor: TextExtractor = {

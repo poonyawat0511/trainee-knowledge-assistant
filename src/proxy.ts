@@ -22,6 +22,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     '/chat/:path*',
+    '/upload/:path*',
     '/api/documents/:path*',
     '/api/chat/:path*',
   ],

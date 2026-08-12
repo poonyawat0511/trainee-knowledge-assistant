@@ -36,9 +36,11 @@ function updateAssistantMessage(
 export function ChatWindow({
   conversationId,
   onConversationCreated,
+  documentId,
 }: {
   conversationId: string | null
   onConversationCreated: (id: string) => void
+  documentId: string | null
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -236,7 +238,7 @@ export function ChatWindow({
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: activeConversationId, message: userMessage }),
+        body: JSON.stringify({ conversationId: activeConversationId, message: userMessage, documentId: documentId ?? undefined }),
       })
 
       if (!response.ok || !response.body) {

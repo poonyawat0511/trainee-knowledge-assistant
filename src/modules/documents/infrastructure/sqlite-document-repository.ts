@@ -52,4 +52,12 @@ export class SqliteDocumentRepository implements DocumentRepository {
       .all(conversationId, userId) as unknown as DocumentRow[]
     return rows.map(toDocument)
   }
+
+  async listByUser(userId: string): Promise<Document[]> {
+    const db = await getDb()
+    const rows = db
+      .prepare('SELECT * FROM documents WHERE user_id = ? ORDER BY created_at DESC')
+      .all(userId) as unknown as DocumentRow[]
+    return rows.map(toDocument)
+  }
 }

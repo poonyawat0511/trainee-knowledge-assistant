@@ -15,11 +15,13 @@ export class SendMessageUseCase {
     userId: string
     conversationId: string
     userMessage: string
+    documentId?: string
   }): Promise<Result<{ reply: string; tokenCount: number }, 'AI_PROVIDER_ERROR'>> {
     const history = await this.messages.listByConversation(input.conversationId)
     const systemPrompt = await this.buildContext.execute({
       userId: input.userId,
       conversationId: input.conversationId,
+      documentId: input.documentId,
     })
 
     const userMsg: Message = {
