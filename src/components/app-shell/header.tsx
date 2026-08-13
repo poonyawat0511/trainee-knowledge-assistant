@@ -46,7 +46,13 @@ export function Header() {
         {pathname === '/chat' && (
           <Select value={documentId ?? 'none'} onValueChange={(v) => setDocumentId(v === 'none' ? null : v)}>
             <SelectTrigger className="w-48">
-              <SelectValue placeholder="Document context" />
+              <SelectValue placeholder="Document context">
+                {(value: string | null) =>
+                  value && value !== 'none'
+                    ? (documents.find((d) => d.id === value)?.filename ?? 'Document context')
+                    : 'No document context'
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">No document context</SelectItem>
