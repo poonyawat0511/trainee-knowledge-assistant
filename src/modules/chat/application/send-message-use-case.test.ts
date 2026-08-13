@@ -32,6 +32,10 @@ describe('SendMessageUseCase', () => {
 
     expect(result).toEqual({ ok: true, value: { reply: 'Hello back', tokenCount: 12 } })
     expect(messages.save).toHaveBeenCalledTimes(2)
+    expect(messages.save).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ role: 'user', content: 'hi', tokenCount: 1 })
+    )
     expect(ai.complete).toHaveBeenCalledOnce()
   })
 

@@ -6,11 +6,22 @@ import remarkGfm from 'remark-gfm'
 import { Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { estimateTokenCount } from '@/shared/kernel/estimate-token-count'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   tokenCount?: number
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-center gap-1 py-0.5" aria-label="Assistant is typing">
+      <span className="size-1.5 animate-bounce rounded-full bg-current opacity-60 [animation-delay:-0.3s]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-current opacity-60 [animation-delay:-0.15s]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-current opacity-60" />
+    </div>
+  )
 }
 
 /**
@@ -156,7 +167,13 @@ export function ChatWindow({
     const generation = streamGenerationRef.current
     const isCurrent = () => streamGenerationRef.current === generation
 
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }, { role: 'assistant', content: '' }])
+    const userTokenCount = estimateTokenCount(userMessage)
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: userMessage, tokenCount: userTokenCount },
+      { role: 'assistant', content: '' },
+    ])
+    setSessionTokens((prev) => prev + userTokenCount)
     setInput('')
 
     try {
@@ -238,7 +255,11 @@ export function ChatWindow({
                 m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
               }`}
             >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+              {m.role === 'assistant' && m.content === '' && sending ? (
+                <TypingIndicator />
+              ) : (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+              )}
               {m.tokenCount !== undefined && (
                 <div className="mt-1 text-xs opacity-60">{m.tokenCount} tokens</div>
               )}

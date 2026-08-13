@@ -3,6 +3,7 @@
 ## Tech Stack
 
 - **Frontend/Backend:** Next.js 16.3 (App Router), TypeScript, Tailwind CSS
+- **UI components:** shadcn/ui (base-ui primitives, not Radix), `lucide-react` icons, `next-themes` for light/dark, `sonner` for toasts
 - **Database:** SQLite via `sql.js` (WASM SQLite, no ORM — schema is small enough that a query builder would be overhead; switched from `better-sqlite3`, see Known Issues)
 - **Vector DB:** none — RAG was explicitly skipped for this pass (see `DECISIONS.md`). Uploaded document text is injected into the chat context directly instead of chunked/embedded/retrieved.
 - **AI provider:** OpenRouter (OpenAI-compatible chat completions API), called via plain `fetch`, no SDK dependency
@@ -16,6 +17,8 @@
 ```bash
 cp .env.example .env
 # fill in OPENROUTER_API_KEY and a real JWT_SECRET in .env
+# generate a strong JWT_SECRET (any random string works, this is just a convenient way to make one):
+openssl rand -base64 48
 docker compose up
 ```
 
@@ -31,17 +34,18 @@ pnpm dev
 
 ## Features Done
 
-- [x] Login + Protected Routes (bcrypt + JWT session cookie, `proxy.ts` guard)
-- [x] File Upload (inline attach in the chat compose box, PDF/TXT, type/size validation, no raw file persisted to disk — only extracted text; each conversation only sees the documents attached to it)
+- [x] Login + Protected Routes (bcrypt + JWT session cookie, `proxy.ts` guard, restyled with shadcn `Card`/`Input`)
+- [x] File Upload (dedicated `/upload` page — a centered card reached via the header's Upload button, PDF/TXT, type/size validation, no raw file persisted to disk — only extracted text; each conversation only sees the documents attached to it; upload success/failure surfaces as a `sonner` toast)
 - [x] Chat with AI (OpenRouter, timeout + retry-on-network-failure, error handling)
-- [x] Chat with Uploaded File Context (document text injected into chat context, truncated to a token budget for large files)
-- [x] Token Usage Counter (per-message and running session total)
+- [x] Chat with Uploaded File Context (document text injected into chat context, truncated to a token budget for large files; document picker lives in the header)
+- [x] Token Usage Counter (per-message and running session total — shown for both the user's own message, estimated instantly on send, and the AI's reply, from the provider's real usage figures)
 - [x] Markdown rendering in AI responses
-- [x] Streaming responses (SSE)
+- [x] Streaming responses (SSE), with an animated typing indicator shown while waiting for the first chunk
 - [x] Conversation history (save/load, including loading a past conversation's messages on switch)
 - [x] Rate limiting (per-user token bucket, shared across the streaming and non-streaming chat endpoints)
 - [x] Docker Compose + healthcheck (see Known Issues — not confirmed working end-to-end in the sandbox this was built in)
 - [x] Unit tests (application-layer use-cases, mocked ports)
+- [x] App shell UI (shadcn/ui rewrite: fixed sidebar + header layout that never causes page-level scrolling, a mobile drawer below the `md` breakpoint, flat pastel light/dark theme with no gradients)
 - [ ] RAG with Vector DB (not done — see `DECISIONS.md`)
 
 ## Architecture
@@ -53,6 +57,8 @@ Each feature is a module under `src/modules/` (`auth`, `documents`, `chat`), org
 - **`infrastructure/`** — concrete implementations of the ports (SQLite repositories, the OpenRouter adapter, bcrypt/JWT services); free to import third-party libraries
 
 `src/app/` (Next.js route handlers and pages) is the presentation layer: each route composes a use-case with its concrete infrastructure via a small factory function (no DI container) and does nothing else — auth check, input validation, use-case call, response shaping.
+
+`/chat` and `/upload` live under the `src/app/(app)/` route group (URL paths unaffected — route groups don't appear in the URL), sharing a fixed sidebar/header shell defined in `(app)/layout.tsx`. Sidebar/conversation/document-picker state is lifted into `AppShellProvider` (`src/components/app-shell/`), a React Context, since the Sidebar and Header live in the shared layout outside either page's own component tree. `/login` stays outside the group — no shell chrome. `src/components/ui/` holds the generated shadcn primitives; `src/shared/kernel/estimate-token-count.ts` is a small `~4 chars/token` heuristic shared between the backend (for the user message's persisted token count) and the chat UI (for showing that count immediately on send, before any round trip).
 
 `src/proxy.ts` is the edge auth guard (Next.js 16's `proxy.js` convention — `middleware.js` is deprecated in this Next.js version). It verifies the session JWT before protected routes/pages are reached.
 

@@ -53,3 +53,21 @@ Per-feature `domain/application/infrastructure` layering makes the dependency di
 ### Trade-offs
 
 This is more ceremony per feature than the flatter alternative — three folders and at least three files (entity, ports, use-case) for even a small piece of logic, and more indirection to trace through when reading the code for the first time (a route handler calls a factory, which composes a use-case, which depends on an interface, which is implemented by an infrastructure class, defined in yet another file). For a project of this size, a flatter structure would likely have been faster to build and just as correct; the clean-architecture split earns its cost primarily through the testability win and the deliberate module-boundary enforcement, not through raw development speed.
+
+## Decision 4: Rewriting the UI on shadcn/ui instead of hand-rolled Tailwind
+
+### Context
+
+The original UI (login form, chat window, inline file-attach) was built as plain Tailwind-styled elements — raw `<button>`/`<input>` tags with utility classes, no shared component layer. As the app grew a sidebar, a header, a mobile drawer, and a second full page (`/upload`), that approach started producing inconsistent spacing, duplicated styling logic between pages, and a layout that could scroll at the page level in a way that looked broken on short viewports. A decision was needed on whether to keep hand-rolling markup or adopt a component layer before the app grew further.
+
+### Alternatives Considered
+
+The main alternative was continuing hand-rolled Tailwind: no new dependency, full control over every class, and no risk of a component library's API not matching an interaction the app needed. A second alternative was a heavier, fully-styled component library (e.g. Chakra, MUI) that ships its own runtime styling engine and design opinions.
+
+### Why shadcn/ui
+
+shadcn/ui generates owned component source files into the repo (`src/components/ui/`) rather than installing an opaque runtime package — so it reads and edits exactly like the rest of the hand-written code, with no black-box styling engine to fight. It sits directly on the Tailwind setup already in place, so adopting it was additive, not a rewrite of the styling approach. Using it gave the app a shared `Button`/`Input`/`Card`/`Sheet`/`Select`/`DropdownMenu` vocabulary once, instead of every page reinventing focus states, disabled states, and spacing by hand — which is what made the fixed sidebar/header/mobile-drawer shell and the `/upload` page's card layout straightforward to build consistently across both.
+
+### Trade-offs
+
+The installed primitives turned out to be built on `@base-ui/react`, not Radix — despite shadcn/ui's own ecosystem documentation and most examples online assuming Radix's `asChild` composition prop. Every polymorphic composition (a `Button` rendering as a `Link`, a `Sheet` trigger rendering as a `Button`) needed adapting to base-ui's `render` prop instead, and one such adaptation was initially done incorrectly (a `<button>` nested inside an `<a>`, invalid HTML) before a task-scoped review caught it. This is a real ongoing cost: any future shadcn snippet copied from documentation or a blog post will need the same manual translation rather than working as pasted.

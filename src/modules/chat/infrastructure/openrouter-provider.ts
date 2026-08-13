@@ -1,3 +1,4 @@
+import { estimateTokenCount } from '@/shared/kernel/estimate-token-count'
 import type { AiProvider } from '../application/ports'
 
 const MODEL = 'openai/gpt-oss-20b:free'
@@ -77,7 +78,7 @@ export class OpenRouterProvider implements AiProvider {
 
       const data = await response.json()
       const content: string = data.choices?.[0]?.message?.content ?? ''
-      const tokenCount: number = data.usage?.total_tokens ?? Math.ceil(content.length / 4)
+      const tokenCount: number = data.usage?.total_tokens ?? estimateTokenCount(content)
 
       return { content, tokenCount }
     } finally {
@@ -182,7 +183,7 @@ export class OpenRouterProvider implements AiProvider {
     }
 
     // Fallback if the provider never sent usage in the stream
-    if (!tokenCount) tokenCount = Math.ceil(fullContent.length / 4)
+    if (!tokenCount) tokenCount = estimateTokenCount(fullContent)
     yield { delta: '', done: true, tokenCount }
   }
 }

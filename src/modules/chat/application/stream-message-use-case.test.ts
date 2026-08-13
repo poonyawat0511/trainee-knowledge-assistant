@@ -45,7 +45,10 @@ describe('StreamMessageUseCase', () => {
     ])
     expect(ai.completeStream).toHaveBeenCalledOnce()
     expect(messages.save).toHaveBeenCalledTimes(2)
-    expect(messages.save).toHaveBeenNthCalledWith(1, expect.objectContaining({ role: 'user', content: 'hi' }))
+    expect(messages.save).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ role: 'user', content: 'hi', tokenCount: 1 })
+    )
     expect(messages.save).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ role: 'assistant', content: 'Hello back', tokenCount: 12 })

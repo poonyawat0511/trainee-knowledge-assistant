@@ -1,3 +1,4 @@
+import { estimateTokenCount } from '@/shared/kernel/estimate-token-count'
 import type { Message } from '../domain/message'
 import type { MessageRepository, AiProvider, IdGenerator, StreamChunk } from './ports'
 import type { BuildContextUseCase } from './build-context-use-case'
@@ -36,7 +37,7 @@ export class StreamMessageUseCase {
       conversationId: input.conversationId,
       role: 'user',
       content: input.userMessage,
-      tokenCount: 0,
+      tokenCount: estimateTokenCount(input.userMessage),
       createdAt: new Date().toISOString(),
     }
     await this.messages.save(userMsg)
