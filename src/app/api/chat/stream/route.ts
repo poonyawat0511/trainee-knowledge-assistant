@@ -50,7 +50,8 @@ export async function POST(request: Request) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: chunk.delta })}\n\n`))
           }
         }
-      } catch {
+      } catch (cause) {
+        console.error('POST /api/chat/stream: AI provider call failed', cause)
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'AI_PROVIDER_ERROR' })}\n\n`))
       } finally {
         controller.close()

@@ -44,7 +44,8 @@ export class SendMessageUseCase {
           { role: 'user', content: input.userMessage },
         ],
       })
-    } catch {
+    } catch (cause) {
+      console.error('SendMessageUseCase: AI provider call failed', cause)
       return err('AI_PROVIDER_ERROR')
     }
 
