@@ -64,6 +64,7 @@ export default function UploadPage() {
                 Back to chat
               </Link>
             }
+            nativeButton={false}
             variant="ghost"
             className="w-full justify-start gap-2"
           />
